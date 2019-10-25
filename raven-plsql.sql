@@ -4,7 +4,7 @@ the unified API is the long-term goal here, with the short-term goal of getting 
    https://docs.sentry.io/development/sdk-dev/unified-api/
  */
 
-CREATE OR REPLACE procedure SYS.RavenClient(
+CREATE OR REPLACE function SYS.RavenClient(
     dsn varchar2,           --DSN provided by Sentry. Currently ony supports old DSN format (with secret key)
     message varchar2,
     error_type varchar2,    --should be used for the whole error code, e.g. 'ORA-42069'
@@ -12,6 +12,8 @@ CREATE OR REPLACE procedure SYS.RavenClient(
     module varchar2,        --
     stacktrace varchar2,    --expected to be output from DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
     errlevel varchar2 := 'warning') -- Valid values for level are: fatal, error, warning, info, debug
+return
+    varchar2    --if successful, returns event id. Otherwise returns null
 as
     client varchar2(50) := 'raven-oracle';
     version varchar2(10) := '1.1';
@@ -23,9 +25,9 @@ as
     hostpath varchar2(500);
     projectid varchar2(255);
     url varchar2(4000);
-    name varchar2(500);
     buffer varchar2(4000);
     dbversion varchar2(2000);
+    event_id varchar2(32);
     stacktrace_json varchar2(4000);
 
     sentry_auth varchar2(2000);
@@ -92,7 +94,9 @@ begin
     -- Extract Oracle Version
     select banner into dbversion from v$version where banner like 'Oracle%';
 
-    payload:=replace(payload, '$gui', lower(SYS_GUID()));
+    event_id := lower(SYS_GUID());
+
+    payload:=replace(payload, '$gui', event_id;
     payload:=replace(payload, '$logger', client);
     payload:=replace(payload, '$timestamp', replace(to_char(SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     payload:=replace(payload, '$message', message);
@@ -144,7 +148,13 @@ begin
 
     res := utl_http.get_response(req);
 
-    begin
+    if res.status_code = utl_http.HTTP_OK then
+        return event_id;
+    else
+        return null;
+    end if;
+
+    /*begin
         loop
           utl_http.read_line(res, buffer);
           dbms_output.put_line(buffer);
@@ -155,6 +165,6 @@ begin
     exception
         when utl_http.end_of_body then
         utl_http.end_response(res);
-    end;
+    end;*/
 end;
 /
