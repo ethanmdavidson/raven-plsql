@@ -37,18 +37,18 @@ as
       "tags": {
         "oracle_version": "$dbversion",
         "sid": "$oraclesid",
-        "current_schema": "$current_schema",
+        "current_schema": "$current_schema"
       },
       "exception": {
           "type": "Error type",
           "value": "Error value",
           "module": "Module",
-          "stacktrace": [],
-      }
+          "stacktrace": []
+      },
       "user":{
         "id": "$username",
         "username": "$username",
-        "ip_address": "$ip_address",
+        "ip_address": "$ip_address"
       }
     }';
 
@@ -94,10 +94,10 @@ begin
     payload:=ltrim(rtrim(payload));
 
     -- Compose header
-    sentry_auth := 'Sentry sentry_version=5,'||
-                   'sentry_client=$sentry_client'||
+    sentry_auth := 'Sentry sentry_version=7,'||
+                   'sentry_client=$sentry_client,'||
                    'sentry_timestamp=$sentry_time,'||
-                   'sentry_key=$sentry_public,'||
+                   'sentry_key=$sentry_key,'||
                    'sentry_secret=$sentry_secret';
     sentry_auth:= replace(sentry_auth, '$sentry_client', client||'/'||version);
     sentry_auth:=replace(sentry_auth, '$sentry_time', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
