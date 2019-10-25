@@ -51,6 +51,7 @@ as
         "ip_address": "$ip_address"
       }
     }';
+    payload_compressed blob := to_blob('1');
 
     i number;
     j number;
@@ -93,6 +94,8 @@ begin
     payload:=replace(payload, chr(10), '');
     payload:=ltrim(rtrim(payload));
 
+    utl_compress.lz_compress(src=> to_blob(utl_raw.cast_to_raw(payload)), dst=> payload_compressed);
+
     -- Compose header
     sentry_auth := 'Sentry sentry_version=7,'||
                    'sentry_client=$sentry_client,'||
@@ -110,8 +113,9 @@ begin
     utl_http.set_header(req, 'payload-Type', 'application/json;charset=UTF-8');
     utl_http.set_header(req, 'Accept', 'application/json');
     utl_http.set_header(req, 'X-Sentry-Auth', sentry_auth);
-    utl_http.set_header (req, 'Content-Length', lengthb(payload));
-    utl_http.write_raw(req, utl_raw.cast_to_raw(payload));
+    utl_http.set_header(req, 'Content-Encoding', 'gzip');
+    utl_http.set_header (req, 'Content-Length', DBMS_LOB.getlength(payload_compressed));
+    utl_http.write_raw(req, payload_compressed);
 
     -- debug messages
     -- dbms_output.put_line(sentry_auth);
