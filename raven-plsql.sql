@@ -67,7 +67,7 @@ begin
 
     payload:=replace(payload, '$gui', lower(SYS_GUID()));
     payload:=replace(payload, '$culprit', client);
-    payload:=replace(payload, '$timestamp', to_char(sysdate, 'YYYY-MM-DD HH24:MI:SS'));
+    payload:=replace(payload, '$timestamp', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     payload:=replace(payload, '$message', message);
     payload:=replace(payload, '$servername', sys_context('USERENV','SERVER_HOST'));
     payload:=replace(payload, '$level', errlevel);
@@ -82,11 +82,11 @@ begin
 
     -- Compose header
     sentry_auth := 'Sentry sentry_version=5,'||
-                   'sentry_client=$client'||
+                   'sentry_client=$sentry_client'||
                    'sentry_timestamp=$sentry_time,'||
                    'sentry_key=$sentry_public,'||
                    'sentry_secret=$sentry_secret';
-    sentry_auth:= replace(sentry_auth, '$client', client||'/'||version
+    sentry_auth:= replace(sentry_auth, '$sentry_client', client||'/'||version
     sentry_auth:=replace(sentry_auth, '$sentry_time', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     sentry_auth:=replace(sentry_auth, '$sentry_key', publickey);
     sentry_auth:=replace(sentry_auth, '$sentry_secret', secretkey);
