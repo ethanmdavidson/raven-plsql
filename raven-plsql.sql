@@ -5,8 +5,12 @@ the unified API is the long-term goal here, with the short-term goal of getting 
  */
 
 CREATE OR REPLACE procedure SYS.RavenClient(
-    dsn varchar2,
+    dsn varchar2,           --DSN provided by Sentry. Currently ony supports old DSN format (with secret key)
     message varchar2,
+    error_type varchar2,    --should be used for the whole error code, e.g. 'ORA-42069'
+    error_value varchar2,   --should be used for the error message, e.g. 'rollback unsupported'
+    module varchar2,        --
+    stacktrace varchar2,    --expected to be output from DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
     errlevel varchar2 := 'warning') -- Valid values for level are: fatal, error, warning, info, debug
 as
     client varchar2(50) := 'raven-oracle';
@@ -22,9 +26,11 @@ as
     name varchar2(500);
     buffer varchar2(4000);
     dbversion varchar2(2000);
+    stacktrace_json varchar2(4000);
 
     sentry_auth varchar2(2000);
 
+    --payload should probably be a lob
     payload varchar2(4000) := '
     {
       "event_id": "$gui",
@@ -40,10 +46,12 @@ as
         "current_schema": "$current_schema"
       },
       "exception": {
-          "type": "Error type",
-          "value": "Error value",
-          "module": "Module",
-          "stacktrace": []
+        "type": "$error_type",
+        "value": "$error_value",
+        "module": "$module",
+        "stacktrace": {
+          "frames": [$stacktrace]
+        }
       },
       "user":{
         "id": "$username",
@@ -73,12 +81,20 @@ begin
 
     url := protocol || '://' || hostpath || '/api/' || projectid || '/store/';
 
+    --parse stacktrace into json (this is very hacky and doesn't produce good results)
+    stacktrace_json := replace(stacktrace, '"', '''');  --replace double quotes with single, because json uses double
+    stacktrace_json := substr(stacktrace_json, 0, length(stacktrace_json)-1); --last char is always newline
+    stacktrace_json := replace(stacktrace_json, chr(10), '},{"'); --replace newlines with commas and curlies
+    stacktrace_json := replace(stacktrace_json, 'ORA-06512', 'function":"ORA-06512'); --prepend with property name
+    stacktrace_json := replace(stacktrace_json, ' line ', '","lineno":'); --prepend with property name
+    stacktrace_json := '{"' || stacktrace_json || '}';   --wrap in double quotes
+
     -- Extract Oracle Version
     select banner into dbversion from v$version where banner like 'Oracle%';
 
     payload:=replace(payload, '$gui', lower(SYS_GUID()));
     payload:=replace(payload, '$logger', client);
-    payload:=replace(payload, '$timestamp', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
+    payload:=replace(payload, '$timestamp', replace(to_char(SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     payload:=replace(payload, '$message', message);
     payload:=replace(payload, '$servername', sys_context('USERENV','SERVER_HOST'));
     payload:=replace(payload, '$level', errlevel);
@@ -87,10 +103,15 @@ begin
     payload:=replace(payload, '$oraclesid', sys_context('USERENV','SID'));
     payload:=replace(payload, '$current_schema', sys_context('USERENV','CURRENT_SCHEMA'));
 
+    payload:=replace(payload, '$error_type', error_type);
+    payload:=replace(payload, '$error_value', error_value);
+    payload:=replace(payload, '$module', module);
+    payload:=replace(payload, '$stacktrace', stacktrace_json);
+
     payload:=replace(payload, '$username', SYS_CONTEXT('USERENV','OS_USER'));
     payload:=replace(payload, '$ip_address', SYS_CONTEXT('USERENV','IP_ADDRESS'));
 
-    payload:=replace(payload, chr(13), '');
+    payload:=replace(payload, chr(13), ''); --trim newline chars from payload
     payload:=replace(payload, chr(10), '');
     payload:=ltrim(rtrim(payload));
 
@@ -103,7 +124,7 @@ begin
                    'sentry_key=$sentry_key,'||
                    'sentry_secret=$sentry_secret';
     sentry_auth:= replace(sentry_auth, '$sentry_client', client||'/'||version);
-    sentry_auth:=replace(sentry_auth, '$sentry_time', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
+    sentry_auth:=replace(sentry_auth, '$sentry_time', replace(to_char(SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     sentry_auth:=replace(sentry_auth, '$sentry_key', publickey);
     sentry_auth:=replace(sentry_auth, '$sentry_secret', secretkey);
 
