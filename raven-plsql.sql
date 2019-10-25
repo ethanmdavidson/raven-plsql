@@ -1,3 +1,9 @@
+/* This function provides an interface for reporting events to sentry. Be aware that while it is
+called "RavenClient" it is not a proper client as defined by the Sentry Unified API. Compliance with
+the unified API is the long-term goal here, with the short-term goal of getting a working MVP.
+   https://docs.sentry.io/development/sdk-dev/unified-api/
+ */
+
 CREATE OR REPLACE procedure SYS.RavenClient(
     dsn varchar2,
     message varchar2,
@@ -22,7 +28,7 @@ as
     payload varchar2(4000) := '
     {
       "event_id": "$gui",
-      "culprit": "$culprit",
+      "logger": "$logger",
       "timestamp": "$timestamp",
       "message": "$message",
       "platform": "plsql",
@@ -31,15 +37,19 @@ as
       "tags": {
         "oracle_version": "$dbversion",
         "sid": "$oraclesid",
-        "current_schema": "$current_schema"
+        "current_schema": "$current_schema",
       },
-      "exception": [
-        {
+      "exception": {
           "type": "Error type",
           "value": "Error value",
-          "module": "Module"
-        }
-      ]
+          "module": "Module",
+          "stacktrace": [],
+      }
+      "user":{
+        "id": "$username",
+        "username": "$username",
+        "ip_address": "$ip_address",
+      }
     }';
 
     i number;
@@ -66,7 +76,7 @@ begin
     select banner into dbversion from v$version where banner like 'Oracle%';
 
     payload:=replace(payload, '$gui', lower(SYS_GUID()));
-    payload:=replace(payload, '$culprit', client);
+    payload:=replace(payload, '$logger', client);
     payload:=replace(payload, '$timestamp', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     payload:=replace(payload, '$message', message);
     payload:=replace(payload, '$servername', sys_context('USERENV','SERVER_HOST'));
@@ -75,6 +85,9 @@ begin
     payload:=replace(payload, '$dbversion', dbversion);
     payload:=replace(payload, '$oraclesid', sys_context('USERENV','SID'));
     payload:=replace(payload, '$current_schema', sys_context('USERENV','CURRENT_SCHEMA'));
+
+    payload:=replace(payload, '$username', SYS_CONTEXT('USERENV','OS_USER'));
+    payload:=replace(payload, '$ip_address', SYS_CONTEXT('USERENV','IP_ADDRESS'));
 
     payload:=replace(payload, chr(13), '');
     payload:=replace(payload, chr(10), '');
@@ -86,11 +99,10 @@ begin
                    'sentry_timestamp=$sentry_time,'||
                    'sentry_key=$sentry_public,'||
                    'sentry_secret=$sentry_secret';
-    sentry_auth:= replace(sentry_auth, '$sentry_client', client||'/'||version
+    sentry_auth:= replace(sentry_auth, '$sentry_client', client||'/'||version);
     sentry_auth:=replace(sentry_auth, '$sentry_time', replace(to_char( SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     sentry_auth:=replace(sentry_auth, '$sentry_key', publickey);
     sentry_auth:=replace(sentry_auth, '$sentry_secret', secretkey);
-
 
     -- Compose request
     req := utl_http.begin_request(url, 'POST',' HTTP/1.1');
