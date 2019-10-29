@@ -11,6 +11,7 @@ CREATE OR REPLACE function SYS.RavenClient(
     error_value varchar2,   --should be used for the error message, e.g. 'rollback unsupported'
     module varchar2,        --
     stacktrace varchar2,    --expected to be output from DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
+    extra_tags varchar2,    --must be valid json map entries, including trailing comma (e.g. `"tag":"value","tag":"value",` )
     errlevel varchar2 := 'warning') -- Valid values for level are: fatal, error, warning, info, debug
 return
     varchar2    --if successful, returns event id. Otherwise returns null
@@ -43,6 +44,7 @@ as
       "server_name": "$servername",
       "level": "$level",
       "tags": {
+        $extra_tags
         "oracle_version": "$dbversion",
         "sid": "$oraclesid",
         "current_schema": "$current_schema"
@@ -114,10 +116,13 @@ begin
     payload:=replace(payload, '$error_type', error_type);
     payload:=replace(payload, '$error_value', error_value);
     payload:=replace(payload, '$module', module);
-    payload:=replace(payload, '$stacktrace', stacktrace_json);
 
     payload:=replace(payload, '$username', SYS_CONTEXT('USERENV','OS_USER'));
     payload:=replace(payload, '$ip_address', SYS_CONTEXT('USERENV','IP_ADDRESS'));
+
+    --replace user-provided values last, in case they happen to include one of the other template strings
+    payload:=replace(payload, '$extra_tags', extra_tags);
+    payload:=replace(payload, '$stacktrace', stacktrace_json);
 
     payload:=replace(payload, chr(13), ''); --trim newline chars from payload
     payload:=replace(payload, chr(10), '');
