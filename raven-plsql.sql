@@ -88,6 +88,7 @@ begin
     if stacktrace is not null and length(stacktrace) > 0 then
         --parse stacktrace into json (this is very hacky and doesn't produce good results)
         stacktrace_json := replace(stacktrace, '"', '''');  --replace double quotes with single, because json uses double
+        stacktrace_json := replace(stacktrace_json, '\', '/');  --replace backslashes because they mess up json parsing
         stacktrace_json := substr(stacktrace_json, 0, length(stacktrace_json)-1); --last char is always newline
         stacktrace_json := replace(stacktrace_json, chr(10), '},{"'); --replace newlines with commas and curlies
         stacktrace_json := replace(stacktrace_json, 'ORA-06512', 'function":"ORA-06512'); --prepend with property name
@@ -121,7 +122,7 @@ begin
     payload:=replace(payload, '$ip_address', SYS_CONTEXT('USERENV','IP_ADDRESS'));
 
     --replace user-provided values last, in case they happen to include one of the other template strings
-    payload:=replace(payload, '$extra_tags', extra_tags);
+    payload:=replace(payload, '$extra_tags', replace(extra_tags, '\', '/'));
     payload:=replace(payload, '$stacktrace', stacktrace_json);
 
     payload:=replace(payload, chr(13), ''); --trim newline chars from payload
@@ -157,13 +158,7 @@ begin
 
     res := utl_http.get_response(req);
 
-    if res.status_code = utl_http.HTTP_OK then
-        return event_id;
-    else
-        return null;
-    end if;
-
-    /*begin
+    begin
         loop
           utl_http.read_line(res, buffer);
           dbms_output.put_line(buffer);
@@ -174,6 +169,12 @@ begin
     exception
         when utl_http.end_of_body then
         utl_http.end_response(res);
-    end;*/
+    end;
+
+    if res.status_code = utl_http.HTTP_OK then
+        return event_id;
+    else
+        return null;
+    end if;
 end;
 /
