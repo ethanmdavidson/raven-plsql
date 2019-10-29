@@ -5,13 +5,13 @@ the unified API is the long-term goal here, with the short-term goal of getting 
  */
 
 CREATE OR REPLACE function SYS.RavenClient(
-    dsn varchar2,           --DSN provided by Sentry. Currently ony supports old DSN format (with secret key)
+    dsn varchar2,   --DSN provided by Sentry. Currently ony supports old DSN format (with secret key)
     message varchar2,
     error_type varchar2,    --should be used for the whole error code, e.g. 'ORA-42069'
     error_value varchar2,   --should be used for the error message, e.g. 'rollback unsupported'
-    module varchar2,        --
-    stacktrace varchar2,    --expected to be output from DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
-    extra_tags varchar2,    --must be valid json map entries, including trailing comma (e.g. `"tag":"value","tag":"value",` )
+    module varchar2,    --
+    stacktrace varchar2 := '',  --expected to be output from DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
+    extra_tags varchar2 := '',  --must be valid json map entries, including trailing comma (e.g. `"tag":"value","tag":"value",` )
     errlevel varchar2 := 'warning') -- Valid values for level are: fatal, error, warning, info, debug
 return
     varchar2    --if successful, returns event id. Otherwise returns null
