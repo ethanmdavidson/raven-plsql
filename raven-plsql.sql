@@ -83,13 +83,17 @@ begin
 
     url := protocol || '://' || hostpath || '/api/' || projectid || '/store/';
 
-    --parse stacktrace into json (this is very hacky and doesn't produce good results)
-    stacktrace_json := replace(stacktrace, '"', '''');  --replace double quotes with single, because json uses double
-    stacktrace_json := substr(stacktrace_json, 0, length(stacktrace_json)-1); --last char is always newline
-    stacktrace_json := replace(stacktrace_json, chr(10), '},{"'); --replace newlines with commas and curlies
-    stacktrace_json := replace(stacktrace_json, 'ORA-06512', 'function":"ORA-06512'); --prepend with property name
-    stacktrace_json := replace(stacktrace_json, ' line ', '","lineno":'); --prepend with property name
-    stacktrace_json := '{"' || stacktrace_json || '}';   --wrap in double quotes
+    if stacktrace is not null and length(stacktrace) > 0 then
+        --parse stacktrace into json (this is very hacky and doesn't produce good results)
+        stacktrace_json := replace(stacktrace, '"', '''');  --replace double quotes with single, because json uses double
+        stacktrace_json := substr(stacktrace_json, 0, length(stacktrace_json)-1); --last char is always newline
+        stacktrace_json := replace(stacktrace_json, chr(10), '},{"'); --replace newlines with commas and curlies
+        stacktrace_json := replace(stacktrace_json, 'ORA-06512', 'function":"ORA-06512'); --prepend with property name
+        stacktrace_json := replace(stacktrace_json, ' line ', '","lineno":'); --prepend with property name
+        stacktrace_json := '{"' || stacktrace_json || '}';   --wrap in double quotes
+    else
+        stacktrace_json := '{}';
+    end if;
 
     -- Extract Oracle Version
     select banner into dbversion from v$version where banner like 'Oracle%';
