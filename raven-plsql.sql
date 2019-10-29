@@ -36,7 +36,7 @@ as
     --payload should probably be a lob
     payload varchar2(4000) := '
     {
-      "event_id": "$gui",
+      "event_id": "$event_id",
       "logger": "$logger",
       "timestamp": "$timestamp",
       "message": "$message",
@@ -102,7 +102,7 @@ begin
 
     event_id := lower(SYS_GUID());
 
-    payload:=replace(payload, '$gui', event_id;
+    payload:=replace(payload, '$event_id', event_id);
     payload:=replace(payload, '$logger', client);
     payload:=replace(payload, '$timestamp', replace(to_char(SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
     payload:=replace(payload, '$message', message);
