@@ -12,6 +12,8 @@ CREATE OR REPLACE function SYS.RavenClient(
     module varchar2,    --
     stacktrace varchar2 := '',  --expected to be output from DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
     extra_tags varchar2 := '',  --must be valid json map entries, including trailing comma (e.g. `"tag":"value","tag":"value",` )
+    username varchar2 := '',    --optionally override username (in case DB is accessed through web server, like with Oracle Forms)
+    ip_address varchar2 := '',  --optionally override IP (for same reason as username)
     errlevel varchar2 := 'warning') -- Valid values for level are: fatal, error, warning, info, debug
 return
     varchar2    --if successful, returns event id. Otherwise returns null
@@ -30,6 +32,8 @@ as
     dbversion varchar2(2000);
     event_id varchar2(32);
     stacktrace_json varchar2(4000);
+    event_username varchar2(500);
+    event_userip varchar2(500);
 
     sentry_auth varchar2(2000);
 
@@ -85,6 +89,7 @@ begin
 
     url := protocol || '://' || hostpath || '/api/' || projectid || '/store/';
 
+    -- Set up data
     if stacktrace is not null and length(stacktrace) > 0 then
         --parse stacktrace into json (this is very hacky and doesn't produce good results)
         stacktrace_json := replace(stacktrace, '"', '''');  --replace double quotes with single, because json uses double
@@ -98,11 +103,22 @@ begin
         stacktrace_json := '{}';
     end if;
 
-    -- Extract Oracle Version
     select banner into dbversion from v$version where banner like 'Oracle%';
-
     event_id := lower(SYS_GUID());
 
+    if username is not null then
+        event_username := username;
+    else
+        event_username := SYS_CONTEXT('USERENV','OS_USER');
+    end if;
+
+    if ip_address is not null then
+        event_userip := ip_address;
+    else
+        event_userip := SYS_CONTEXT('USERENV','IP_ADDRESS');
+    end if;
+
+    -- fill payload
     payload:=replace(payload, '$event_id', event_id);
     payload:=replace(payload, '$logger', client);
     payload:=replace(payload, '$timestamp', replace(to_char(SYS_EXTRACT_UTC(SYSTIMESTAMP),'YYYY-MM-DD HH24:MI:SS'),' ','T'));
@@ -118,8 +134,8 @@ begin
     payload:=replace(payload, '$error_value', error_value);
     payload:=replace(payload, '$module', module);
 
-    payload:=replace(payload, '$username', SYS_CONTEXT('USERENV','OS_USER'));
-    payload:=replace(payload, '$ip_address', SYS_CONTEXT('USERENV','IP_ADDRESS'));
+    payload:=replace(payload, '$username', event_username);
+    payload:=replace(payload, '$ip_address', event_userip);
 
     --replace user-provided values last, in case they happen to include one of the other template strings
     payload:=replace(payload, '$extra_tags', replace(extra_tags, '\', '/'));
