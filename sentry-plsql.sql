@@ -37,8 +37,7 @@ as
 
     sentry_auth varchar2(2000);
 
-    --payload should probably be a lob
-    payload varchar2(4000) := '
+    payload CLOB := '
     {
       "event_id": "$event_id",
       "logger": "$logger",
@@ -145,7 +144,19 @@ begin
     payload:=replace(payload, chr(10), '');
     payload:=ltrim(rtrim(payload));
 
-    utl_compress.lz_compress(src=> to_blob(utl_raw.cast_to_raw(payload)), dst=> payload_compressed);
+    --compress payload
+    declare
+        tempBlob blob;
+        dest_offset integer := 1;
+        src_offset integer := 1;
+        lang_context integer := 0;
+        warning varchar2(4000);
+    begin
+        dbms_lob.createTemporary(tempBlob, true);
+        dbms_lob.convertToBlob(tempBlob, payload, dbms_lob.getLength(payload), dest_offset, src_offset, 0, lang_context, warning);
+        payload_compressed := utl_compress.lz_compress(tempBlob);
+        dbms_lob.freeTemporary(tempBlob);
+    end;
 
     -- Compose header
     sentry_auth := 'Sentry sentry_version=7,'||
