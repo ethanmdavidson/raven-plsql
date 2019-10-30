@@ -1,10 +1,10 @@
 /* This function provides an interface for reporting events to sentry. Be aware that while it is
-called "RavenClient" it is not a proper client as defined by the Sentry Unified API. Compliance with
+called "SentryClient" it is not a proper client as defined by the Sentry Unified API. Compliance with
 the unified API is the long-term goal here, with the short-term goal of getting a working MVP.
    https://docs.sentry.io/development/sdk-dev/unified-api/
  */
 
-CREATE OR REPLACE function SYS.RavenClient(
+CREATE OR REPLACE function SentryClient(
     dsn varchar2,   --DSN provided by Sentry. Currently ony supports old DSN format (with secret key)
     message varchar2,
     error_type varchar2,    --should be used for the whole error code, e.g. 'ORA-42069'
@@ -18,8 +18,8 @@ CREATE OR REPLACE function SYS.RavenClient(
 return
     varchar2    --if successful, returns event id. Otherwise returns null
 as
-    client varchar2(50) := 'raven-oracle';
-    version varchar2(10) := '1.1';
+    client varchar2(50) := 'sentry-plsql';
+    version varchar2(10) := '1.0';
     req utl_http.req;
     res utl_http.resp;
     protocol varchar2(10);
